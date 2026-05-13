@@ -2,6 +2,8 @@
 //!
 //! This crate provides the core Rust implementation for cocoindex,
 //! exposing Python bindings via PyO3.
+//!
+//! Personal fork: experimenting with indexing pipelines for local document search.
 
 use pyo3::prelude::*;
 
@@ -46,5 +48,11 @@ mod tests {
     #[test]
     fn test_version_not_empty() {
         assert!(!VERSION.is_empty());
+    }
+
+    #[test]
+    fn test_version_is_semver() {
+        // Basic sanity check: version should contain at least one dot (e.g. "0.1.0")
+        assert!(VERSION.contains('.'), "VERSION should be a semver string");
     }
 }
