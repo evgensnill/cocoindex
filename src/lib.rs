@@ -38,6 +38,9 @@ fn _cocoindex_rs(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     storage::register_module(py, storage_module)?;
     m.add_submodule(storage_module)?;
 
+    // TODO(personal): add a transform submodule registration here once
+    // I flesh out the local document transform pipeline
+
     Ok(())
 }
 
@@ -54,5 +57,12 @@ mod tests {
     fn test_version_is_semver() {
         // Basic sanity check: version should contain at least one dot (e.g. "0.1.0")
         assert!(VERSION.contains('.'), "VERSION should be a semver string");
+    }
+
+    #[test]
+    fn test_version_has_three_parts() {
+        // Verify the version string looks like MAJOR.MINOR.PATCH
+        let parts: Vec<&str> = VERSION.split('.').collect();
+        assert_eq!(parts.len(), 3, "VERSION should have exactly three semver components");
     }
 }
