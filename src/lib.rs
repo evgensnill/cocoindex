@@ -65,4 +65,12 @@ mod tests {
         let parts: Vec<&str> = VERSION.split('.').collect();
         assert_eq!(parts.len(), 3, "VERSION should have exactly three semver components");
     }
+
+    #[test]
+    fn test_version_parts_are_numeric() {
+        // Each semver component should parse as a valid integer
+        for part in VERSION.split('.') {
+            assert!(part.parse::<u32>().is_ok(), "VERSION component '{}' is not a valid integer", part);
+        }
+    }
 }
