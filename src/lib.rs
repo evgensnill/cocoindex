@@ -70,14 +70,15 @@ pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
-/// Validate that a document ID is well-formed
+/// Validate that a document ID is well-formed.
+/// Max length raised to 1024 to accommodate longer path-based IDs (e.g. nested S3 keys).
 #[pyfunction]
 pub fn validate_document_id(id: &str) -> PyResult<bool> {
     if id.is_empty() {
         return Err(PyValueError::new_err("Document ID cannot be empty"));
     }
-    if id.len() > 512 {
-        return Err(PyValueError::new_err("Document ID exceeds maximum length of 512 characters"));
+    if id.len() > 1024 {
+        return Err(PyValueError::new_err("Document ID exceeds maximum length of 1024 characters"));
     }
     // IDs must be alphanumeric with hyphens and underscores
     let valid = id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '/');
