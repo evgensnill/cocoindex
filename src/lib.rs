@@ -1,76 +1,105 @@
-//! CocoIndex - A high-performance data indexing library
-//!
-//! This crate provides the core Rust implementation for cocoindex,
-//! exposing Python bindings via PyO3.
-//!
-//! Personal fork: experimenting with indexing pipelines for local document search.
+// cocoindex - A high-performance document indexing library
+// Built with Rust core and Python bindings via PyO3
 
 use pyo3::prelude::*;
+use pyo3::exceptions::PyValueError;
 
-pub mod index;
-pub mod pipeline;
+pub mod indexer;
 pub mod storage;
-pub mod transform;
-pub mod utils;
+pub mod query;
+pub mod pipeline;
 
-/// Core version of the cocoindex library
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Python module initialization
-/// Registers all Python-accessible classes and functions
-#[pymodule]
-fn _cocoindex_rs(py: Python<'_>, m: &PyModule) -> PyResult<()> {
-    // Register version info
-    m.add("__version__", VERSION)?;
-
-    // Register index submodule
-    let index_module = PyModule::new(py, "index")?;
-    index::register_module(py, index_module)?;
-    m.add_submodule(index_module)?;
-
-    // Register pipeline submodule
-    let pipeline_module = PyModule::new(py, "pipeline")?;
-    pipeline::register_module(py, pipeline_module)?;
-    m.add_submodule(pipeline_module)?;
-
-    // Register storage submodule
-    let storage_module = PyModule::new(py, "storage")?;
-    storage::register_module(py, storage_module)?;
-    m.add_submodule(storage_module)?;
-
-    // TODO(personal): add a transform submodule registration here once
-    // I flesh out the local document transform pipeline
-
-    Ok(())
+/// Core document representation
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct Document {
+    #[pyo3(get, set)]
+    pub id: String,
+    #[pyo3(get, set)]
+    pub content: String,
+    #[pyo3(get, set)]
+    pub metadata: std::collections::HashMap<String, String>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_version_not_empty() {
-        assert!(!VERSION.is_empty());
-    }
-
-    #[test]
-    fn test_version_is_semver() {
-        // Basic sanity check: version should contain at least one dot (e.g. "0.1.0")
-        assert!(VERSION.contains('.'), "VERSION should be a semver string");
-    }
-
-    #[test]
-    fn test_version_has_three_parts() {
-        // Verify the version string looks like MAJOR.MINOR.PATCH
-        let parts: Vec<&str> = VERSION.split('.').collect();
-        assert_eq!(parts.len(), 3, "VERSION should have exactly three semver components");
-    }
-
-    #[test]
-    fn test_version_parts_are_numeric() {
-        // Each semver component should parse as a valid integer
-        for part in VERSION.split('.') {
-            assert!(part.parse::<u32>().is_ok(), "VERSION component '{}' is not a valid integer", part);
+#[pymethods]
+impl Document {
+    #[new]
+    pub fn new(id: String, content: String) -> Self {
+        Document {
+            id,
+            content,
+            metadata: std::collections::HashMap::new(),
         }
     }
+
+    /// Add metadata key-value pair to the document
+    pub fn add_metadata(&mut self, key: String, value: String) {
+        self.metadata.insert(key, value);
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("Document(id='{}', content_len={})", self.id, self.content.len())
+    }
+}
+
+/// Index statistics returned after indexing operations
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct IndexStats {
+    #[pyo3(get)]
+    pub documents_indexed: usize,
+    #[pyo3(get)]
+    pub tokens_processed: usize,
+    #[pyo3(get)]
+    pub elapsed_ms: u64,
+}
+
+#[pymethods]
+impl IndexStats {
+    pub fn __repr__(&self) -> String {
+        format!(
+            "IndexStats(docs={}, tokens={}, elapsed_ms={})",
+            self.documents_indexed, self.tokens_processed, self.elapsed_ms
+        )
+    }
+}
+
+/// Version information for the library
+#[pyfunction]
+pub fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+/// Validate that a document ID is well-formed
+#[pyfunction]
+pub fn validate_document_id(id: &str) -> PyResult<bool> {
+    if id.is_empty() {
+        return Err(PyValueError::new_err("Document ID cannot be empty"));
+    }
+    if id.len() > 512 {
+        return Err(PyValueError::new_err("Document ID exceeds maximum length of 512 characters"));
+    }
+    // IDs must be alphanumeric with hyphens and underscores
+    let valid = id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '/');
+    Ok(valid)
+}
+
+/// The main cocoindex Python module
+#[pymodule]
+fn cocoindex(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<Document>()?;
+    m.add_class::<IndexStats>()?;
+    m.add_function(wrap_pyfunction!(version, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_document_id, m)?)?;
+
+    // Register submodules
+    let indexer_module = PyModule::new(m.py(), "indexer")?;
+    indexer::register(m.py(), &indexer_module)?;
+    m.add_submodule(&indexer_module)?;
+
+    let query_module = PyModule::new(m.py(), "query")?;
+    query::register(m.py(), &query_module)?;
+    m.add_submodule(&query_module)?;
+
+    Ok(())
 }
